@@ -1,2 +1,5 @@
 transformers
 datasets
+evaluate
+numpy
+sentencepiece

@@ -162,3 +162,5 @@ cython_debug/
 scratch
 todo
 runs
+checkpoints/*
+!checkpoints/.gitkeep

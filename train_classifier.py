@@ -1,3 +1,5 @@
+from pathlib import Path
+import shutil
 from tqdm import tqdm
 from transformers import T5ForConditionalGeneration
 from comparison_dataset import ComparisionDataset
@@ -37,6 +39,7 @@ device = "cuda"
 writer = SummaryWriter()
 global_steps = 0
 
+best_val_loss = 1e9
 for epoch in range(EPOCHS):
     model.train().to(device)
     for batch in tqdm(train_loader):
@@ -86,6 +89,19 @@ for epoch in range(EPOCHS):
             f"### Input ###\n\n{prompt}\n\n### Expected ###\n\n{expected}\n\n### Output ###\n\n{generated_text}",
             epoch,
         )
+
+        # Save the model checkpoint
+        checkpoint_path = Path(f"./checkpoints/classifiers/epoch_{epoch+1}")
+        try:
+            shutil.rmtree(checkpoint_path)
+        except Exception:
+            ...
+        checkpoint_path.parent.mkdir(exist_ok=True, parents=True)
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            with open(checkpoint_path.parent / "best.txt", "w") as f:
+                f.write(str(epoch))
+        model.save_pretrained(checkpoint_path)
 
 # Close the writer
 writer.close()

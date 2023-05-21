@@ -4,3 +4,4 @@ evaluate
 numpy
 sentencepiece
 black
+tensorboard

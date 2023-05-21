@@ -1,6 +1,6 @@
 from tqdm import tqdm
 from transformers import T5ForConditionalGeneration
-from datasets.sft_dataset import SftDataset
+from wrapped_datasets.sft_dataset import SftDataset
 from torch.utils.data import DataLoader
 import torch
 from torch.utils.tensorboard import SummaryWriter

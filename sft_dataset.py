@@ -8,7 +8,6 @@ class SftDataset(Dataset):
     INSTRUCTION = "summarize: "
 
     def __init__(self, split, debug=False):
-        # dataset = load_dataset("CarperAI/openai_summarize_comparisons")
         self.dataset = load_dataset("CarperAI/openai_summarize_tldr")[split]
         if debug:
             self.dataset = self.dataset.select(range(5))

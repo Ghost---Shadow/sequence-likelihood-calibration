@@ -73,7 +73,9 @@ for epoch in range(EPOCHS):
     with torch.no_grad():
         sample_input_ids, prompt, expected = val_dataset.sanity_check()
         sample_input_ids = sample_input_ids.to(device)
+        model.eval()
         generated = model.generate(sample_input_ids, max_length=100, temperature=0.0)
+        model.train()
         generated_text = SftDataset.tokenizer.decode(generated[0])
         writer.add_text(
             "Text Generation",

@@ -1,6 +1,6 @@
 import torch
 from tqdm import tqdm
-from src.datasets.comparison_dataset import ComparisionDataset
+from datasets.comparison_dataset import ComparisionDataset
 from torch.utils.data import DataLoader
 from transformers import T5ForConditionalGeneration
 

@@ -2,7 +2,7 @@ from pathlib import Path
 import shutil
 from tqdm import tqdm
 from transformers import T5ForConditionalGeneration
-from datasets.comparison_dataset import ComparisionDataset
+from wrapped_datasets.comparison_dataset import ComparisionDataset
 from torch.utils.data import DataLoader
 import torch
 from torch.utils.tensorboard import SummaryWriter

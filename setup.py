@@ -5,7 +5,7 @@ with open("requirements.txt", "r") as req_file:
     requirements = req_file.readlines()
 
 setup(
-    name="Your-Package-Name",
+    name="my-slic",
     version="0.1.0",
     author="Your Name",
     author_email="your-email@example.com",

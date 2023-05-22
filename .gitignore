@@ -164,3 +164,5 @@ todo
 runs
 checkpoints/*
 !checkpoints/.gitkeep
+generated_data/*
+!generated_data/.gitkeep

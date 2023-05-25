@@ -7,6 +7,7 @@ from datasets import load_dataset
 class ComparisionDataset(Dataset):
     tokenizer = T5Tokenizer.from_pretrained("t5-small")
     INSTRUCTION = "summarize: "
+    LABELS = ["A", "B"]
 
     def __init__(self, split, debug=False):
         ComparisionDataset.tokenizer.add_tokens(["\n"])
@@ -31,12 +32,26 @@ class ComparisionDataset(Dataset):
         return len(tokens) <= 512
 
     @staticmethod
+    def tokenized_labels():
+        tokens = ComparisionDataset.tokenizer(
+            ComparisionDataset.LABELS,
+            padding=False,
+            truncation=False, # Manual truncation
+            return_tensors="pt",
+        ).input_ids
+        # Drop EOS
+        return tokens[:,0].squeeze()
+
+    @staticmethod
     def format_row(row):
-        labels = ["A", "B"]
         row["chosen"] = row["chosen"].replace("TL;DR: ", "").strip()
         row["rejected"] = row["rejected"].replace("TL;DR: ", "").strip()
         answers = [None, None]
         prompt = row["prompt"]
+
+        # Truncate the document
+        # TODO: Do it properly
+        prompt = prompt[:1024]
 
         prompt = prompt.split("POST: ")[1]
         prompt = prompt.replace("\\r\\n", " ")
@@ -46,7 +61,7 @@ class ComparisionDataset(Dataset):
 
         correct_index = random.randint(0, 1)
 
-        correct_answer = labels[correct_index]
+        correct_answer = ComparisionDataset.LABELS[correct_index]
         answers[correct_index] = row["chosen"]
         answers[1 - correct_index] = row["rejected"]
 
@@ -122,6 +137,7 @@ def test_dataloader(dataloader):
 
 if __name__ == "__main__":
     dataset = ComparisionDataset(split="train", debug=True)
+    print('Label tokens', dataset.tokenized_labels())
     dataloader = DataLoader(
         dataset, batch_size=2, shuffle=True, collate_fn=ComparisionDataset.collate_fn
     )

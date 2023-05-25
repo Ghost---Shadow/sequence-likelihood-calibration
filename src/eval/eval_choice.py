@@ -23,21 +23,31 @@ val_loader = DataLoader(
 device = "cuda"
 model.to(device)
 
+# Get the tokenized labels from the dataset
+tokenized_labels = ComparisionDataset.tokenized_labels().to(device)
+
 samples_seen = 0
 corrects = 0
 with torch.no_grad():
     with tqdm(total=len(val_loader)) as pbar:
         for batch in val_loader:
             input_ids = batch["input_ids"].to(device)
-            chosen_labels = batch["chosen_labels"].to(device)
-            rejected_labels = batch["rejected_labels"].to(device)
+            labels = batch["labels"].to(device)
 
-            chosen_loss = model(input_ids=input_ids, labels=chosen_labels).loss
-            rejected_loss = model(input_ids=input_ids, labels=rejected_labels).loss
+            # Get the model outputs
+            outputs = model(input_ids=input_ids, labels=labels)
+            logits = outputs.logits
+            logits = logits[:,0,:].squeeze(axis=1)
 
-            samples_seen += 1
-            if rejected_loss > chosen_loss:
-                corrects += 1
+            # Mask the logits with the tokenized labels
+            masked_logits = logits[:,tokenized_labels]
+
+            # Get the predicted labels
+            predicted_labels = torch.argmax(masked_logits, dim=-1)
+
+            # Calculate the number of correct predictions
+            corrects += (predicted_labels == labels).sum().item()
+            samples_seen += labels.size(0)
 
             pbar.update(1)
             pbar.set_description("{:.2f}".format(corrects / samples_seen))

@@ -36,14 +36,14 @@ class ComparisionDataset(Dataset):
         tokens = ComparisionDataset.tokenizer(
             ComparisionDataset.LABELS,
             padding=False,
-            truncation=False, # Manual truncation
+            truncation=False,  # Manual truncation
             return_tensors="pt",
         ).input_ids
         # Drop EOS
-        return tokens[:,0].squeeze()
+        return tokens[:, 0].squeeze()
 
     @staticmethod
-    def format_row(row):
+    def format_row(row, correct_index=None):
         row["chosen"] = row["chosen"].replace("TL;DR: ", "").strip()
         row["rejected"] = row["rejected"].replace("TL;DR: ", "").strip()
         answers = [None, None]
@@ -59,7 +59,8 @@ class ComparisionDataset(Dataset):
         prompt = prompt.replace("\r\n", " ")
         prompt = prompt.replace("\n", " ")
 
-        correct_index = random.randint(0, 1)
+        if correct_index is None:
+            correct_index = random.randint(0, 1)
 
         correct_answer = ComparisionDataset.LABELS[correct_index]
         answers[correct_index] = row["chosen"]
@@ -137,7 +138,7 @@ def test_dataloader(dataloader):
 
 if __name__ == "__main__":
     dataset = ComparisionDataset(split="train", debug=True)
-    print('Label tokens', dataset.tokenized_labels())
+    print("Label tokens", dataset.tokenized_labels())
     dataloader = DataLoader(
         dataset, batch_size=2, shuffle=True, collate_fn=ComparisionDataset.collate_fn
     )

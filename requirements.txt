@@ -5,3 +5,4 @@ numpy
 sentencepiece
 black
 tensorboard
+pytest

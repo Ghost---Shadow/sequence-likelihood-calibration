@@ -1,3 +1,5 @@
+import json
+from pathlib import Path
 import random
 from torch.utils.data import Dataset, DataLoader
 from transformers import T5Tokenizer
@@ -9,14 +11,37 @@ class ComparisionDataset(Dataset):
     INSTRUCTION = "summarize: "
     LABELS = ["A", "B"]
 
-    def __init__(self, split, debug=False):
-        ComparisionDataset.tokenizer.add_tokens(["\n"])
-        self.dataset = load_dataset("CarperAI/openai_summarize_comparisons")[split]
+    def _jsonl_loader(self, jsonl_path, split, debug):
+        self.dataset = []
+        with open(jsonl_path) as f:
+            for line in f:
+                self.dataset.append(json.loads(line))
 
-        # self.dataset = self.dataset.filter(ComparisionDataset.filter_function)
+        train_split = int(0.8 * len(self.dataset))
+
+        if split == "train":
+            self.dataset = self.dataset[:train_split]
+        elif split == "valid1":
+            self.dataset = self.dataset[train_split:]
+        else:
+            raise NotImplementedError()
 
         if debug:
+            self.dataset = self.dataset[:100]
+
+    def _huggingface_loader(self, split, debug):
+        self.dataset = load_dataset("CarperAI/openai_summarize_comparisons")[split]
+        # self.dataset = self.dataset.filter(ComparisionDataset.filter_function)
+        if debug:
             self.dataset = self.dataset.select(range(100))
+
+    def __init__(self, split, jsonl_path=None, debug=False):
+        ComparisionDataset.tokenizer.add_tokens(["\n"])
+
+        if jsonl_path is None:
+            self._huggingface_loader(split, debug)
+        else:
+            self._jsonl_loader(jsonl_path, split, debug)
 
     def __len__(self):
         return len(self.dataset)
@@ -114,9 +139,9 @@ class ComparisionDataset(Dataset):
         }
 
 
-def test_dataloader(dataloader):
+def test_dataloader(dataloader, outfile_name):
     # Open a txt file
-    with open("dataloader_output.txt", "w") as f:
+    with open(outfile_name, "w") as f:
         # Loop over the first 5 items of dataloader
         for i, row in enumerate(dataloader):
             if i >= 5:  # only need the first 5 items
@@ -143,4 +168,23 @@ if __name__ == "__main__":
         dataset, batch_size=2, shuffle=True, collate_fn=ComparisionDataset.collate_fn
     )
 
-    test_dataloader(dataloader)
+    sanity_path = Path('generated_data/sanity_check')
+    sanity_path.mkdir(exist_ok=True, parents=True)
+
+    test_dataloader(dataloader, sanity_path / 'hf_comparison.txt')
+
+    jsonl_path = 'generated_data/classified_summaries_length/result.jsonl'
+
+    dataset = ComparisionDataset(jsonl_path=jsonl_path, split="train", debug=True)
+    print("Label tokens", dataset.tokenized_labels())
+    dataloader = DataLoader(
+        dataset, batch_size=2, shuffle=True, collate_fn=ComparisionDataset.collate_fn
+    )
+    test_dataloader(dataloader, sanity_path / 'length_train.txt')
+
+    dataset = ComparisionDataset(jsonl_path=jsonl_path, split="valid1", debug=True)
+    print("Label tokens", dataset.tokenized_labels())
+    dataloader = DataLoader(
+        dataset, batch_size=2, shuffle=True, collate_fn=ComparisionDataset.collate_fn
+    )
+    test_dataloader(dataloader, sanity_path / 'length_valid1.txt')

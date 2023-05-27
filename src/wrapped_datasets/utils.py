@@ -1,10 +1,12 @@
 def clean_prompt(prompt):
-    prompt = prompt.split("POST: ")[1]
+    if 'POST:' in prompt:
+        prompt = prompt.split("POST: ")[1]
     prompt = prompt.replace("\\r\\n", " ")
     prompt = prompt.replace("\\n", " ")
     prompt = prompt.replace("\r\n", " ")
     prompt = prompt.replace("\n", " ")
     prompt = prompt.replace("TL;DR:", "")
+    prompt = prompt.replace("summarize:", "")
 
     # TODO: Do it properly
     prompt = prompt.strip()[:1024].strip()

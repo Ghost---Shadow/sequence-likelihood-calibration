@@ -31,18 +31,18 @@ with torch.no_grad():
     with tqdm(total=len(val_loader)) as pbar:
         for batch in val_loader:
             input_ids = batch["input_ids"].to(device)
-            labels = batch["labels"].to(device)[:,:1]
+            labels = batch["labels"].to(device)[:, :1]
 
             # Get the model outputs
             outputs = model(input_ids=input_ids, labels=labels)
             logits = outputs.logits
-            logits = logits[:,0,:].squeeze(axis=1)
+            logits = logits[:, 0, :].squeeze(axis=1)
 
             probs = torch.exp(logits)
 
             # Mask out non-relevant tokens
             mask = torch.zeros_like(logits).to(device)
-            mask[:,tokenized_labels] = 1
+            mask[:, tokenized_labels] = 1
 
             # Mask the logits with the tokenized labels
             masked_probs = probs * mask

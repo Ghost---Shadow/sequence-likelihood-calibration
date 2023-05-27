@@ -4,6 +4,7 @@ import random
 from torch.utils.data import Dataset, DataLoader
 from transformers import T5Tokenizer
 from datasets import load_dataset
+from wrapped_datasets.utils import clean_prompt, test_dataloader
 
 
 class ComparisionDataset(Dataset):
@@ -74,15 +75,7 @@ class ComparisionDataset(Dataset):
         answers = [None, None]
         prompt = row["prompt"]
 
-        # Truncate the document
-        # TODO: Do it properly
-        prompt = prompt[:1024]
-
-        prompt = prompt.split("POST: ")[1]
-        prompt = prompt.replace("\\r\\n", " ")
-        prompt = prompt.replace("\\n", " ")
-        prompt = prompt.replace("\r\n", " ")
-        prompt = prompt.replace("\n", " ")
+        prompt = clean_prompt(prompt)
 
         if correct_index is None:
             correct_index = random.randint(0, 1)
@@ -139,28 +132,6 @@ class ComparisionDataset(Dataset):
         }
 
 
-def test_dataloader(dataloader, outfile_name):
-    # Open a txt file
-    with open(outfile_name, "w") as f:
-        # Loop over the first 5 items of dataloader
-        for i, row in enumerate(dataloader):
-            if i >= 5:  # only need the first 5 items
-                break
-
-            # Detokenize input_ids and labels
-            input_texts = ComparisionDataset.tokenizer.batch_decode(
-                row["input_ids"], skip_special_tokens=True
-            )
-            label_texts = ComparisionDataset.tokenizer.batch_decode(
-                row["labels"], skip_special_tokens=True
-            )
-
-            # Write detokenized texts to txt file
-            for input_text, label_text in zip(input_texts, label_texts):
-                f.write(f"{input_text}{label_text}\n")
-                f.write("---\n")
-
-
 if __name__ == "__main__":
     dataset = ComparisionDataset(split="train", debug=True)
     print("Label tokens", dataset.tokenized_labels())
@@ -168,23 +139,25 @@ if __name__ == "__main__":
         dataset, batch_size=2, shuffle=True, collate_fn=ComparisionDataset.collate_fn
     )
 
-    sanity_path = Path('generated_data/sanity_check')
+    sanity_path = Path("generated_data/sanity_check")
     sanity_path.mkdir(exist_ok=True, parents=True)
 
-    test_dataloader(dataloader, sanity_path / 'hf_comparison.txt')
+    tokenizer = ComparisionDataset.tokenizer
 
-    jsonl_path = 'generated_data/classified_summaries_length/result.jsonl'
+    test_dataloader(dataloader, sanity_path / "hf_comparison.txt", tokenizer)
+
+    jsonl_path = "generated_data/classified_summaries_length/result.jsonl"
 
     dataset = ComparisionDataset(jsonl_path=jsonl_path, split="train", debug=True)
     print("Label tokens", dataset.tokenized_labels())
     dataloader = DataLoader(
         dataset, batch_size=2, shuffle=True, collate_fn=ComparisionDataset.collate_fn
     )
-    test_dataloader(dataloader, sanity_path / 'length_train.txt')
+    test_dataloader(dataloader, sanity_path / "length_train.txt", tokenizer)
 
     dataset = ComparisionDataset(jsonl_path=jsonl_path, split="valid1", debug=True)
     print("Label tokens", dataset.tokenized_labels())
     dataloader = DataLoader(
         dataset, batch_size=2, shuffle=True, collate_fn=ComparisionDataset.collate_fn
     )
-    test_dataloader(dataloader, sanity_path / 'length_valid1.txt')
+    test_dataloader(dataloader, sanity_path / "length_valid1.txt", tokenizer)

@@ -23,15 +23,6 @@ class SlicDataset(Dataset):
             for line in f:
                 self.dataset.append(json.loads(line))
 
-        train_split = int(0.8 * len(self.dataset))
-
-        if split == "train":
-            self.dataset = self.dataset[:train_split]
-        elif split == "valid":
-            self.dataset = self.dataset[train_split:]
-        else:
-            raise NotImplementedError()
-
         # Merge two datasets
         for i in tqdm(range(len(self.dataset))):
             sft_row = hf_dataset[i]

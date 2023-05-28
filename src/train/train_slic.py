@@ -1,3 +1,6 @@
+import argparse
+from pathlib import Path
+import time
 from tqdm import tqdm
 from train.utils import rmrf_then_mkdir
 from transformers import T5ForConditionalGeneration
@@ -7,35 +10,60 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 import torch.nn.functional as F
 
-model = T5ForConditionalGeneration.from_pretrained("t5-small")
-model.train()
 
-EPOCHS = 10
-BATCH_SIZE = 2
-LR = 1e-5
-DEBUG = True
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--model-name",
+        type=str,
+        default="t5-small",
+    )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=10,
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=2,
+    )
+    parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=1e-5,
+    )
+    parser.add_argument(
+        "--train-jsonl-path",
+        type=str,
+        default="generated_data/classified_summaries_length/train.jsonl",
+    )
+    parser.add_argument(
+        "--val-jsonl-path",
+        type=str,
+        default="generated_data/classified_summaries_length/valid.jsonl",
+    )
+    parser.add_argument(
+        "--loss-type",
+        type=str,
+        default="slic_loss",
+        choices=["slic_loss", "slic_loss_logits"],
+    )
+    parser.add_argument(
+        "--logdir",
+        type=str,
+        default="runs/slic/long_short",
+    )
+    parser.add_argument("--debug", action="store_true")
 
-jsonl_path = "generated_data/classified_summaries_length/result.jsonl"
-train_dataset = SlicDataset(jsonl_path=jsonl_path, split="train", debug=DEBUG)
-val_dataset = SlicDataset(jsonl_path=jsonl_path, split="valid", debug=DEBUG)
-
-train_loader = DataLoader(
-    train_dataset,
-    batch_size=BATCH_SIZE,
-    shuffle=False,
-    collate_fn=SlicDataset.collate_fn,
-)
-val_loader = DataLoader(
-    val_dataset, batch_size=BATCH_SIZE, shuffle=False, collate_fn=SlicDataset.collate_fn
-)
-
-optimizer = torch.optim.AdamW(model.parameters(), lr=LR)
-
-device = "cuda"
-model.to(device)
+    args = parser.parse_args()
+    return args
 
 
-def slic_loss_logits(model, batch, delta=0.5, lambda_reg=0.5):
+def slic_loss_logits(
+    model, batch, train_step=0, writer=None, delta=0.5, lambda_reg=0.5
+):
+    device = model.device
     prompt = batch["prompts"].to(device)
     chosen = batch["chosens"].to(device)
     rejected = batch["rejecteds"].to(device)
@@ -55,6 +83,10 @@ def slic_loss_logits(model, batch, delta=0.5, lambda_reg=0.5):
     calibration_loss = F.relu(delta - log_prob_chosen + log_prob_rejected)
     calibration_loss = calibration_loss.mean()
 
+    if writer is not None:
+        writer.add_scalar("Loss/calibration", calibration_loss, train_step)
+        writer.add_scalar("Loss/reference", reference_loss, train_step)
+
     # Calculate the regularization loss
     regularization_loss = lambda_reg * reference_loss
 
@@ -64,7 +96,8 @@ def slic_loss_logits(model, batch, delta=0.5, lambda_reg=0.5):
     return loss
 
 
-def slic_loss(model, batch, train_step=0, writer=None, delta=0.1, lambda_reg=0.1):
+def slic_loss(model, batch, train_step=0, writer=None, delta=0.5, lambda_reg=0.5):
+    device = model.device
     prompt = batch["prompts"].to(device)
     chosen = batch["chosens"].to(device)
     rejected = batch["rejecteds"].to(device)
@@ -90,69 +123,127 @@ def slic_loss(model, batch, train_step=0, writer=None, delta=0.1, lambda_reg=0.1
     return loss
 
 
-# Initialize TensorBoard writer
-# LOG_DIR = "runs/slic/long_short_logits_1"
-LOG_DIR = "runs/slic/long_short_loss_1"
-rmrf_then_mkdir(LOG_DIR)
-writer = SummaryWriter(log_dir=LOG_DIR)
+def setup_datasets(args):
+    batch_size = args.batch_size
+    train_jsonl_path = args.train_jsonl_path
+    val_jsonl_path = args.val_jsonl_path
+    debug = args.debug
 
-# loss_fn = slic_loss_logits
-loss_fn = slic_loss
+    train_dataset = SlicDataset(jsonl_path=train_jsonl_path, split="train", debug=debug)
+    val_dataset = SlicDataset(jsonl_path=val_jsonl_path, split="valid", debug=debug)
 
-train_step = 0
-for epoch in range(EPOCHS):
-    total_loss = 0
-    model.eval().to(device)
-    with torch.no_grad():
-        for batch in tqdm(val_loader):
-            loss = loss_fn(model, batch)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        collate_fn=SlicDataset.collate_fn,
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        collate_fn=SlicDataset.collate_fn,
+    )
+    sanity_check = val_dataset.sanity_check(check_idx=0)
+    # sanity_check = train_dataset.sanity_check(check_idx=2)
+
+    return train_loader, val_loader, sanity_check
+
+
+def train_loop(args):
+    model_name = args.model_name
+    epochs = args.epochs
+    learning_rate = args.learning_rate
+    loss_type = args.loss_type
+    logdir = Path(args.logdir)
+
+    model = T5ForConditionalGeneration.from_pretrained(model_name)
+    model.train()
+
+    train_loader, val_loader, sanity_check = setup_datasets(args)
+
+    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+
+    device = "cuda"
+    model.to(device)
+
+    # Initialize TensorBoard writer
+    epoch_time = int(time.time())
+    full_logdir = logdir / f"{loss_type}_{learning_rate}_{epoch_time}"
+    rmrf_then_mkdir(full_logdir)
+    writer = SummaryWriter(log_dir=full_logdir)
+
+    loss_fn = {
+        "slic_loss": slic_loss,
+        "slic_loss_logits": slic_loss_logits,
+    }[loss_type]
+
+    train_step = 0
+    for epoch in range(epochs):
+        total_loss = 0
+        model.eval()
+        with torch.no_grad():
+            for batch in tqdm(val_loader):
+                loss = loss_fn(model=model, batch=batch)
+
+                total_loss += loss.item()
+
+        val_loss = total_loss / len(val_loader)
+        print(f"Validation loss {val_loss}")
+
+        # Log validation loss to TensorBoard
+        writer.add_scalar("Loss/validation", val_loss, epoch)
+
+        # Generate a sample text and log it to TensorBoard
+        with torch.no_grad():
+            (
+                sample_input_ids,
+                prompt,
+                chosen,
+                rejected,
+                reference,
+            ) = sanity_check
+            sample_input_ids = sample_input_ids.to(device)
+            model.eval()
+            generated = model.generate(
+                sample_input_ids, max_length=100, temperature=0.0
+            )
+            model.train()
+            generated_text = SlicDataset.tokenizer.decode(generated[0])
+            writer.add_text(
+                "Text Generation",
+                f"### Input ###\n\n{prompt}\n\n### Output ###\n\n{generated_text}\n\n### Chosen ###\n\n{chosen}\n\n### Rejected ###\n\n{rejected}\n\n### Reference ###\n\n{reference}",
+                epoch,
+            )
+
+        model.train()
+        total_loss = 0
+        for batch in tqdm(train_loader):
+            optimizer.zero_grad()
+            train_step += 1
+            loss = loss_fn(
+                model=model,
+                batch=batch,
+                train_step=train_step,
+                writer=writer,
+            )
+
+            loss.backward()
+            optimizer.step()
 
             total_loss += loss.item()
 
-    val_loss = total_loss / len(val_loader)
-    print(f"Validation loss {val_loss}")
+        train_loss = total_loss / len(train_loader)
+        print(f"Train loss {train_loss}")
 
-    # Log validation loss to TensorBoard
-    writer.add_scalar("Loss/validation", val_loss, epoch)
+        # Log training loss to TensorBoard
+        writer.add_scalar("Loss/train", train_loss, epoch)
 
-    # Generate a sample text and log it to TensorBoard
-    with torch.no_grad():
-        (
-            sample_input_ids,
-            prompt,
-            chosen,
-            rejected,
-            reference,
-        ) = val_dataset.sanity_check(check_idx=0)
-        # ) = train_dataset.sanity_check(check_idx=2)
-        sample_input_ids = sample_input_ids.to(device)
-        model.eval()
-        generated = model.generate(sample_input_ids, max_length=100, temperature=0.0)
-        model.train()
-        generated_text = SlicDataset.tokenizer.decode(generated[0])
-        writer.add_text(
-            "Text Generation",
-            f"### Input ###\n\n{prompt}\n\n### Output ###\n\n{generated_text}\n\n### Chosen ###\n\n{chosen}\n\n### Rejected ###\n\n{rejected}\n\n### Reference ###\n\n{reference}",
-            epoch,
-        )
+    # Close the writer
+    writer.close()
 
-    model.train()
-    total_loss = 0
-    for batch in tqdm(train_loader):
-        optimizer.zero_grad()
-        train_step += 1
-        loss = loss_fn(model, batch, train_step, writer)
 
-        loss.backward()
-        optimizer.step()
+if __name__ == "__main__":
+    args = parse_args()
 
-        total_loss += loss.item()
-
-    train_loss = total_loss / len(train_loader)
-    print(f"Train loss {train_loss}")
-
-    # Log training loss to TensorBoard
-    writer.add_scalar("Loss/train", train_loss, epoch)
-
-# Close the writer
-writer.close()
+    train_loop(args)

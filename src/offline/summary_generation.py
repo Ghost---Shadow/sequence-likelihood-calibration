@@ -15,6 +15,7 @@ from wrapped_datasets.sft_dataset import SftDataset
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--summary-checkpoint", type=str, default="t5-small")
+    parser.add_argument("--split", type=str)
     parser.add_argument(
         "--output-dir",
         type=str,
@@ -27,7 +28,9 @@ def parse_args():
     return args
 
 
-def generate_summaries(summary_checkpoint, output_dir, num_return_sequences, debug):
+def generate_summaries(
+    summary_checkpoint, output_dir, split, num_return_sequences, debug
+):
     device = "cuda"
 
     tokenizer = T5Tokenizer.from_pretrained("t5-small")
@@ -35,7 +38,7 @@ def generate_summaries(summary_checkpoint, output_dir, num_return_sequences, deb
     summary_model = T5ForConditionalGeneration.from_pretrained(summary_checkpoint)
     summary_model.eval()
 
-    dataset = SftDataset("train", debug=debug)
+    dataset = SftDataset(split, debug=debug)
     data_loader = DataLoader(
         dataset,
         batch_size=1,  # Dont change
@@ -45,7 +48,7 @@ def generate_summaries(summary_checkpoint, output_dir, num_return_sequences, deb
 
     summary_model = summary_model.to(device)
 
-    with open(output_dir / "result.jsonl", "w") as f:
+    with open(output_dir / f"{split}.jsonl", "w") as f:
         for batch in tqdm(data_loader):
             input_ids = batch["input_ids"].to(device)
 
@@ -81,10 +84,13 @@ if __name__ == "__main__":
     summary_checkpoint = args.summary_checkpoint
     output_dir = args.output_dir
     num_return_sequences = args.num_return_sequences
+    split = args.split
     debug = args.debug
 
     output_dir = Path(output_dir)
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    generate_summaries(summary_checkpoint, output_dir, num_return_sequences, debug)
+    generate_summaries(
+        summary_checkpoint, output_dir, split, num_return_sequences, debug
+    )

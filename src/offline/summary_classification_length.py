@@ -1,16 +1,7 @@
 import argparse
+import os
 from pathlib import Path
-from tqdm import tqdm
-from transformers import (
-    T5ForConditionalGeneration,
-    T5Tokenizer,
-)
-from torch.utils.data import DataLoader
-import torch
 import json
-from wrapped_datasets.comparison_dataset import ComparisionDataset
-
-from wrapped_datasets.sft_dataset import SftDataset
 
 
 def parse_args():
@@ -61,20 +52,21 @@ def find_longest_and_shortest(strings):
 
 
 def classify_summaries(summary_dir, classification_dir):
-    with open(classification_dir / "result.jsonl", "w") as f_out:
-        with open(summary_dir / "result.jsonl") as f_in:
-            for line in f_in:
-                row = json.loads(line)
-                longest, shortest = find_longest_and_shortest(row["summaries"])
-                s = json.dumps(
-                    {
-                        "prompt": row["prompt"],
-                        "chosen": shortest,
-                        "rejected": longest,
-                    }
-                )
-                f_out.write(f"{s}\n")
-                f_out.flush()
+    for file_name in os.listdir(summary_dir):
+        with open(classification_dir / file_name, "w") as f_out:
+            with open(summary_dir / file_name) as f_in:
+                for line in f_in:
+                    row = json.loads(line)
+                    longest, shortest = find_longest_and_shortest(row["summaries"])
+                    s = json.dumps(
+                        {
+                            "prompt": row["prompt"],
+                            "chosen": shortest,
+                            "rejected": longest,
+                        }
+                    )
+                    f_out.write(f"{s}\n")
+                    f_out.flush()
 
 
 if __name__ == "__main__":

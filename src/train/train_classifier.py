@@ -21,7 +21,7 @@ val_dataset = ComparisionDataset("valid1", debug=DEBUG)
 train_loader = DataLoader(
     train_dataset,
     batch_size=BATCH_SIZE,
-    shuffle=True,
+    shuffle=False,
     collate_fn=ComparisionDataset.collate_fn,
 )
 val_loader = DataLoader(

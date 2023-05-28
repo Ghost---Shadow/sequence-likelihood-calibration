@@ -112,7 +112,7 @@ if __name__ == "__main__":
     jsonl_path = "generated_data/classified_summaries_length/result.jsonl"
     dataset = SlicDataset(jsonl_path=jsonl_path, split="valid", debug=True)
     dataloader = DataLoader(
-        dataset, batch_size=2, shuffle=True, collate_fn=SlicDataset.collate_fn
+        dataset, batch_size=2, shuffle=False, collate_fn=SlicDataset.collate_fn
     )
 
     sanity_path = Path("generated_data/sanity_check")

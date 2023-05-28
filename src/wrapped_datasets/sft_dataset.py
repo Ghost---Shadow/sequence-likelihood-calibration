@@ -59,7 +59,7 @@ class SftDataset(Dataset):
 if __name__ == "__main__":
     dataset = SftDataset(split="train")
     dataloader = DataLoader(
-        dataset, batch_size=2, shuffle=True, collate_fn=SftDataset.collate_fn
+        dataset, batch_size=2, shuffle=False, collate_fn=SftDataset.collate_fn
     )
 
     sanity_path = Path("generated_data/sanity_check")

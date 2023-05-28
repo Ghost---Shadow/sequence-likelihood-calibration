@@ -136,7 +136,7 @@ if __name__ == "__main__":
     dataset = ComparisionDataset(split="train", debug=True)
     print("Label tokens", dataset.tokenized_labels())
     dataloader = DataLoader(
-        dataset, batch_size=2, shuffle=True, collate_fn=ComparisionDataset.collate_fn
+        dataset, batch_size=2, shuffle=False, collate_fn=ComparisionDataset.collate_fn
     )
 
     sanity_path = Path("generated_data/sanity_check")
@@ -151,13 +151,13 @@ if __name__ == "__main__":
     dataset = ComparisionDataset(jsonl_path=jsonl_path, split="train", debug=True)
     print("Label tokens", dataset.tokenized_labels())
     dataloader = DataLoader(
-        dataset, batch_size=2, shuffle=True, collate_fn=ComparisionDataset.collate_fn
+        dataset, batch_size=2, shuffle=False, collate_fn=ComparisionDataset.collate_fn
     )
     test_dataloader(dataloader, sanity_path / "length_train.txt", tokenizer)
 
     dataset = ComparisionDataset(jsonl_path=jsonl_path, split="valid1", debug=True)
     print("Label tokens", dataset.tokenized_labels())
     dataloader = DataLoader(
-        dataset, batch_size=2, shuffle=True, collate_fn=ComparisionDataset.collate_fn
+        dataset, batch_size=2, shuffle=False, collate_fn=ComparisionDataset.collate_fn
     )
     test_dataloader(dataloader, sanity_path / "length_valid1.txt", tokenizer)

@@ -17,7 +17,7 @@ train_dataset = SftDataset("train", debug=DEBUG)
 val_dataset = SftDataset("valid", debug=DEBUG)
 
 train_loader = DataLoader(
-    train_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=SftDataset.collate_fn
+    train_dataset, batch_size=BATCH_SIZE, shuffle=False, collate_fn=SftDataset.collate_fn
 )
 val_loader = DataLoader(
     val_dataset, batch_size=BATCH_SIZE, shuffle=False, collate_fn=SftDataset.collate_fn

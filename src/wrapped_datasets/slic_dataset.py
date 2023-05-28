@@ -1,11 +1,10 @@
 import json
 from pathlib import Path
-import random
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 from transformers import T5Tokenizer
 from datasets import load_dataset
-from wrapped_datasets.utils import clean_prompt, test_dataloader
+from wrapped_datasets.utils import clean_prompt
 
 
 class SlicDataset(Dataset):
@@ -16,13 +15,7 @@ class SlicDataset(Dataset):
         SlicDataset.tokenizer.add_tokens(["\n"])
 
         # Store references from HF dataset
-        self.hf_dataset = load_dataset("CarperAI/openai_summarize_tldr")[split]
-        prompt_lut = {}
-        for row in tqdm(self.hf_dataset):
-            prompt = clean_prompt(row["prompt"])
-            prompt_lut[prompt] = {
-                "reference": row["label"],
-            }
+        hf_dataset = load_dataset("CarperAI/openai_summarize_tldr")[split]
 
         # Load generated summaries
         self.dataset = []
@@ -43,46 +36,27 @@ class SlicDataset(Dataset):
             self.dataset = self.dataset[:100]
 
         # Merge two datasets
-        foo = []
         for i in tqdm(range(len(self.dataset))):
+            sft_row = hf_dataset[i]
+
             prompt = self.dataset[i]["prompt"]
             prompt = clean_prompt(prompt)
-            if prompt not in prompt_lut:
-                continue
-            hf_data = prompt_lut[prompt]
-            foo.append({
-                **self.dataset[i],
-                **hf_data,
-            })
+            sft_prompt = sft_row["prompt"]
+            sft_prompt = clean_prompt(sft_prompt)
+            assert sft_prompt.startswith(prompt), sft_prompt + "\n\n" + prompt
 
-        self.dataset = foo
+            reference = sft_row["label"]
+
+            self.dataset[i] = {
+                **self.dataset[i],
+                "reference": reference,
+            }
 
     def __len__(self):
         return len(self.dataset)
 
-    @staticmethod
-    def filter_function(row):
-        row = SlicDataset.format_row(row)
-        all_text = row["full_prompt"] + row["correct_answer"]
-        tokens = SlicDataset.tokenizer(
-            all_text,
-            return_tensors="pt",
-        ).input_ids
-        return len(tokens) <= 512
-
     def __getitem__(self, idx):
-        row = self.dataset[idx]
-        return SlicDataset.format_row(row)
-
-    def sanity_check(self):
-        prompts = [self[0]["full_prompt"]]
-        input_ids = SlicDataset._tokenize(prompts)
-
-        return (
-            input_ids,
-            self[0]["full_prompt"],
-            self[0]["correct_answer"],
-        )
+        return self.dataset[idx]
 
     @staticmethod
     def _tokenize(s, padding=True):
@@ -96,21 +70,56 @@ class SlicDataset(Dataset):
 
     @staticmethod
     def collate_fn(batch):
-        input_ids = [item["full_prompt"] for item in batch]
-        labels = [item["correct_answer"] for item in batch]
+        prompts = [item["prompt"] for item in batch]
+        chosens = [item["chosen"] for item in batch]
+        rejecteds = [item["rejected"] for item in batch]
+        references = [item["reference"] for item in batch]
 
-        input_ids = SlicDataset._tokenize(input_ids)
-        labels = SlicDataset._tokenize(labels, padding=False)
+        prompts = SlicDataset._tokenize(prompts)
+        chosens = SlicDataset._tokenize(chosens)
+        rejecteds = SlicDataset._tokenize(rejecteds)
+        references = SlicDataset._tokenize(references)
 
         return {
-            "input_ids": input_ids,
-            "labels": labels,
+            "prompts": prompts,
+            "chosens": chosens,
+            "rejecteds": rejecteds,
+            "references": references,
         }
+
+
+def test_slic_dataloader(dataloader, outfile_name, tokenizer):
+    # Open a txt file
+    with open(outfile_name, "w") as f:
+        # Loop over the first 5 items of dataloader
+        for i, row in enumerate(dataloader):
+            if i >= 5:  # only need the first 5 items
+                break
+
+            # Detokenize input_ids and labels
+            prompts = tokenizer.batch_decode(row["prompts"], skip_special_tokens=True)
+            chosens = tokenizer.batch_decode(row["chosens"], skip_special_tokens=True)
+            rejecteds = tokenizer.batch_decode(
+                row["rejecteds"], skip_special_tokens=True
+            )
+            references = tokenizer.batch_decode(
+                row["references"], skip_special_tokens=True
+            )
+
+            # Write detokenized texts to txt file
+            for prompt, chosen, rejected, reference in zip(
+                prompts, chosens, rejecteds, references
+            ):
+                f.write(f"prompt: {prompt}\n")
+                f.write(f"chosen: {chosen}\n")
+                f.write(f"rejected: {rejected}\n")
+                f.write(f"reference: {reference}\n")
+                f.write("---\n")
 
 
 if __name__ == "__main__":
     jsonl_path = "generated_data/classified_summaries_length/result.jsonl"
-    dataset = SlicDataset(jsonl_path=jsonl_path, split="valid", debug=True)
+    dataset = SlicDataset(jsonl_path=jsonl_path, split="train", debug=True)
     dataloader = DataLoader(
         dataset, batch_size=2, shuffle=False, collate_fn=SlicDataset.collate_fn
     )
@@ -120,4 +129,4 @@ if __name__ == "__main__":
 
     tokenizer = SlicDataset.tokenizer
 
-    test_dataloader(dataloader, sanity_path / "slic.txt", tokenizer)
+    test_slic_dataloader(dataloader, sanity_path / "slic.txt", tokenizer)

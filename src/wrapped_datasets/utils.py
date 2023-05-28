@@ -1,12 +1,17 @@
+import re
+
+
 def clean_prompt(prompt):
-    if 'POST:' in prompt:
-        prompt = prompt.split("POST: ")[1]
+    if "POST:" in prompt:
+        prompt = prompt.split("POST:")[1]
     prompt = prompt.replace("\\r\\n", " ")
     prompt = prompt.replace("\\n", " ")
     prompt = prompt.replace("\r\n", " ")
     prompt = prompt.replace("\n", " ")
     prompt = prompt.replace("TL;DR:", "")
     prompt = prompt.replace("summarize:", "")
+    prompt = prompt.replace("<extra_id_-1>", "")
+    prompt = re.sub(r"\s+", " ", prompt)
 
     # TODO: Do it properly
     prompt = prompt.strip()[:1024].strip()

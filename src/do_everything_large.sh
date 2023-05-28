@@ -5,5 +5,5 @@ python src/offline/summary_generation.py --split=valid --model-name=t5-base --ba
 
 python src/offline/summary_classification_length.py
 
-python src/train/train_slic.py --loss-type=slic_loss --model-name=t5-base
-python src/train/train_slic.py --loss-type=slic_loss_logits --model-name=t5-base
+python src/train/train_slic.py --loss-type=slic_loss --model-name=t5-base --limit=1000
+python src/train/train_slic.py --loss-type=slic_loss_logits --model-name=t5-base --limit=1000

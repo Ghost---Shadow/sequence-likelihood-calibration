@@ -11,7 +11,7 @@ class SlicDataset(Dataset):
     tokenizer = T5Tokenizer.from_pretrained("t5-small")
     INSTRUCTION = "summarize: "
 
-    def __init__(self, split, jsonl_path, debug=False):
+    def __init__(self, split, jsonl_path, limit=None):
         SlicDataset.tokenizer.add_tokens(["\n"])
 
         # Store references from HF dataset
@@ -40,8 +40,8 @@ class SlicDataset(Dataset):
                 "reference": reference,
             }
 
-        if debug:
-            self.dataset = self.dataset[:5]
+        if limit is not None:
+            self.dataset = self.dataset[:limit]
 
     def __len__(self):
         return len(self.dataset)
@@ -122,7 +122,7 @@ def test_slic_dataloader(dataloader, outfile_name, tokenizer):
 
 if __name__ == "__main__":
     jsonl_path = "generated_data/classified_summaries_length/result.jsonl"
-    dataset = SlicDataset(jsonl_path=jsonl_path, split="train", debug=True)
+    dataset = SlicDataset(jsonl_path=jsonl_path, split="train", limit=5)
     dataloader = DataLoader(
         dataset, batch_size=2, shuffle=False, collate_fn=SlicDataset.collate_fn
     )

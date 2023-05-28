@@ -59,7 +59,7 @@ def parse_args():
         type=str,
         default="./checkpoints/slic/long_short",
     )
-    parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--limit", type=int, default=10)
 
     args = parser.parse_args()
     return args
@@ -132,10 +132,10 @@ def setup_datasets(args):
     batch_size = args.batch_size
     train_jsonl_path = args.train_jsonl_path
     val_jsonl_path = args.val_jsonl_path
-    debug = args.debug
+    limit = args.limit
 
-    train_dataset = SlicDataset(jsonl_path=train_jsonl_path, split="train", debug=debug)
-    val_dataset = SlicDataset(jsonl_path=val_jsonl_path, split="valid", debug=debug)
+    train_dataset = SlicDataset(jsonl_path=train_jsonl_path, split="train", limit=limit)
+    val_dataset = SlicDataset(jsonl_path=val_jsonl_path, split="valid", limit=limit)
 
     train_loader = DataLoader(
         train_dataset,

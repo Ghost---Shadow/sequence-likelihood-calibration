@@ -9,11 +9,12 @@ class SftDataset(Dataset):
     tokenizer = T5Tokenizer.from_pretrained("t5-small")
     INSTRUCTION = "summarize: "
 
-    def __init__(self, split, debug=False):
+    def __init__(self, split, limit=None):
         SftDataset.tokenizer.add_tokens(["\n"])
         self.dataset = load_dataset("CarperAI/openai_summarize_tldr")[split]
-        if debug:
-            self.dataset = self.dataset.select(range(5))
+        if limit is not None:
+            limit = min(len(self.dataset), limit)
+            self.dataset = self.dataset.select(range(limit))
 
     def __len__(self):
         return len(self.dataset)

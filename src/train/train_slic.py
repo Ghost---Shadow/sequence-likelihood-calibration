@@ -21,7 +21,7 @@ def parse_args():
     parser.add_argument(
         "--epochs",
         type=int,
-        default=10,
+        default=5,
     )
     parser.add_argument(
         "--batch-size",

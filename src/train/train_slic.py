@@ -36,12 +36,12 @@ def parse_args():
     parser.add_argument(
         "--train-jsonl-path",
         type=str,
-        default="generated_data/classified_summaries_length/train.jsonl",
+        default="./generated_data/classified_summaries_length/train.jsonl",
     )
     parser.add_argument(
         "--val-jsonl-path",
         type=str,
-        default="generated_data/classified_summaries_length/valid.jsonl",
+        default="./generated_data/classified_summaries_length/valid.jsonl",
     )
     parser.add_argument(
         "--loss-type",
@@ -52,7 +52,12 @@ def parse_args():
     parser.add_argument(
         "--logdir",
         type=str,
-        default="runs/slic/long_short",
+        default="./runs/slic/long_short",
+    )
+    parser.add_argument(
+        "--checkpoint-dir",
+        type=str,
+        default="./checkpoints/slic/long_short",
     )
     parser.add_argument("--debug", action="store_true")
 
@@ -156,6 +161,7 @@ def train_loop(args):
     learning_rate = args.learning_rate
     loss_type = args.loss_type
     logdir = Path(args.logdir)
+    checkpoint_dir = Path(args.checkpoint_dir)
 
     model = T5ForConditionalGeneration.from_pretrained(model_name)
     model.train()
@@ -167,11 +173,17 @@ def train_loop(args):
     device = "cuda"
     model.to(device)
 
-    # Initialize TensorBoard writer
     epoch_time = int(time.time())
-    full_logdir = logdir / f"{loss_type}_{learning_rate}_{epoch_time}"
+    experiment_name = f"{loss_type}_{learning_rate}_{epoch_time}"
+    full_logdir = logdir / experiment_name
+
+    # Initialize TensorBoard writer
     rmrf_then_mkdir(full_logdir)
     writer = SummaryWriter(log_dir=full_logdir)
+
+    # Checkpoints
+    full_checkpoint_dir = checkpoint_dir / experiment_name
+    rmrf_then_mkdir(full_checkpoint_dir)
 
     loss_fn = {
         "slic_loss": slic_loss,
@@ -238,6 +250,9 @@ def train_loop(args):
 
         # Log training loss to TensorBoard
         writer.add_scalar("Loss/train", train_loss, epoch)
+
+        # Drop one checkpoint per epoch
+        torch.save(model.state_dict(), full_checkpoint_dir / f'epoch_{epoch+1}.pth')
 
     # Close the writer
     writer.close()

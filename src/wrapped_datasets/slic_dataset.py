@@ -32,9 +32,6 @@ class SlicDataset(Dataset):
         else:
             raise NotImplementedError()
 
-        if debug:
-            self.dataset = self.dataset[:100]
-
         # Merge two datasets
         for i in tqdm(range(len(self.dataset))):
             sft_row = hf_dataset[i]
@@ -52,6 +49,9 @@ class SlicDataset(Dataset):
                 "reference": reference,
             }
 
+        if debug:
+            self.dataset = self.dataset[:5]
+
     def __len__(self):
         return len(self.dataset)
 
@@ -67,6 +67,18 @@ class SlicDataset(Dataset):
             return_tensors="pt",
         ).input_ids
         return tokens
+    
+    def sanity_check(self):
+        prompts = [self[0]["prompt"]]
+        input_ids = SlicDataset._tokenize(prompts)
+
+        return (
+            input_ids,
+            self[0]["prompt"],
+            self[0]["chosen"],
+            self[0]["rejected"],
+            self[0]["reference"],
+        )
 
     @staticmethod
     def collate_fn(batch):

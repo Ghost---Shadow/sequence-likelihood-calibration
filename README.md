@@ -7,10 +7,12 @@ Reproduction of [SLiC-HF: Sequence Likelihood Calibration with Human Feedback](h
 ## Installation
 
 ```sh
-conda create -n slic python=3.9 -y
-conda activate slic
-conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia -y
-pip install -r requirements.txt
+# Install conda
+https://repo.anaconda.com/miniconda/Miniconda3-py39_23.3.1-0-Linux-x86_64.sh
+sh Miniconda3-py39_23.3.1-0-Linux-x86_64.sh
+
+# Install this
+source devops/install.sh
 ```
 
 ## Running

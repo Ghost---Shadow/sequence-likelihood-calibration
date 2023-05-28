@@ -15,8 +15,8 @@ LR = 1e-3
 DEBUG = True
 
 jsonl_path = "generated_data/classified_summaries_length/result.jsonl"
-train_dataset = SlicDataset(jsonl_path=jsonl_path,split="train", debug=DEBUG)
-val_dataset = SlicDataset(jsonl_path=jsonl_path,split="valid", debug=DEBUG)
+train_dataset = SlicDataset(jsonl_path=jsonl_path, split="train", debug=DEBUG)
+val_dataset = SlicDataset(jsonl_path=jsonl_path, split="valid", debug=DEBUG)
 
 train_loader = DataLoader(
     train_dataset,
@@ -35,6 +35,36 @@ model.to(device)
 
 # Initialize TensorBoard writer
 writer = SummaryWriter(log_dir="runs/slic/long_short_1")
+
+
+def slic_loss_logits(model, batch, delta=0.5, lambda_reg=0.1):
+    prompt = batch["prompts"].to(device)
+    chosen = batch["chosens"].to(device)
+    rejected = batch["rejecteds"].to(device)
+    reference = batch["references"].to(device)
+
+    # Pad all sequences to the same length
+    max_length = max(chosen.size(1), rejected.size(1), reference.size(1))
+    chosen = F.pad(chosen, (0, max_length - chosen.size(1)))
+    rejected = F.pad(rejected, (0, max_length - rejected.size(1)))
+    reference = F.pad(reference, (0, max_length - reference.size(1)))
+
+    # Calculate the log probabilities of the sequences
+    log_prob_chosen = model(input_ids=prompt, labels=chosen).logits
+    log_prob_rejected = model(input_ids=prompt, labels=rejected).logits
+    reference_loss = model(input_ids=prompt, labels=reference).loss
+
+    # Calculate the calibration loss
+    calibration_loss = F.relu(delta - log_prob_chosen + log_prob_rejected)
+
+    # Calculate the regularization loss
+    regularization_loss = lambda_reg * reference_loss
+
+    # Combine the losses
+    loss = calibration_loss.mean() + regularization_loss
+
+    return loss
+
 
 def slic_loss(model, batch, delta=0.1, lambda_reg=0.1):
     prompt = batch["prompts"].to(device)
@@ -57,12 +87,15 @@ def slic_loss(model, batch, delta=0.1, lambda_reg=0.1):
     return loss
 
 
+loss_fn = slic_loss_logits
+# loss_fn = slic_loss
+
 for epoch in range(EPOCHS):
     model.train()
     total_loss = 0
     for batch in tqdm(train_loader):
         optimizer.zero_grad()
-        loss = slic_loss(model, batch)
+        loss = loss_fn(model, batch)
 
         loss.backward()
         optimizer.step()
@@ -79,7 +112,7 @@ for epoch in range(EPOCHS):
     model.eval().to(device)
     with torch.no_grad():
         for batch in tqdm(val_loader):
-            loss = slic_loss(model, batch)
+            loss = loss_fn(model, batch)
 
             total_loss += loss.item()
 
@@ -91,7 +124,13 @@ for epoch in range(EPOCHS):
 
     # Generate a sample text and log it to TensorBoard
     with torch.no_grad():
-        sample_input_ids, prompt, chosen, rejected, reference = val_dataset.sanity_check()
+        (
+            sample_input_ids,
+            prompt,
+            chosen,
+            rejected,
+            reference,
+        ) = val_dataset.sanity_check()
         sample_input_ids = sample_input_ids.to(device)
         model.eval()
         generated = model.generate(sample_input_ids, max_length=100, temperature=0.0)

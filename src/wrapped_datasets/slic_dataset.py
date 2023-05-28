@@ -67,17 +67,17 @@ class SlicDataset(Dataset):
             return_tensors="pt",
         ).input_ids
         return tokens
-    
-    def sanity_check(self):
-        prompts = [self[0]["prompt"]]
+
+    def sanity_check(self, check_idx=0):
+        prompts = [self[check_idx]["prompt"]]
         input_ids = SlicDataset._tokenize(prompts)
 
         return (
             input_ids,
-            self[0]["prompt"],
-            self[0]["chosen"],
-            self[0]["rejected"],
-            self[0]["reference"],
+            self[check_idx]["prompt"],
+            self[check_idx]["chosen"],
+            self[check_idx]["rejected"],
+            self[check_idx]["reference"],
         )
 
     @staticmethod

@@ -1,4 +1,5 @@
 from tqdm import tqdm
+from train.utils import rmrf_then_mkdir
 from transformers import T5ForConditionalGeneration
 from wrapped_datasets.slic_dataset import SlicDataset
 from torch.utils.data import DataLoader
@@ -9,9 +10,9 @@ import torch.nn.functional as F
 model = T5ForConditionalGeneration.from_pretrained("t5-small")
 model.train()
 
-EPOCHS = 3
+EPOCHS = 10
 BATCH_SIZE = 2
-LR = 1e-3
+LR = 1e-5
 DEBUG = True
 
 jsonl_path = "generated_data/classified_summaries_length/result.jsonl"
@@ -33,21 +34,17 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=LR)
 device = "cuda"
 model.to(device)
 
-# Initialize TensorBoard writer
-writer = SummaryWriter(log_dir="runs/slic/long_short_1")
 
-
-def slic_loss_logits(model, batch, delta=0.5, lambda_reg=0.1):
+def slic_loss_logits(model, batch, delta=0.5, lambda_reg=0.5):
     prompt = batch["prompts"].to(device)
     chosen = batch["chosens"].to(device)
     rejected = batch["rejecteds"].to(device)
     reference = batch["references"].to(device)
 
     # Pad all sequences to the same length
-    max_length = max(chosen.size(1), rejected.size(1), reference.size(1))
+    max_length = max(chosen.size(1), rejected.size(1))
     chosen = F.pad(chosen, (0, max_length - chosen.size(1)))
     rejected = F.pad(rejected, (0, max_length - rejected.size(1)))
-    reference = F.pad(reference, (0, max_length - reference.size(1)))
 
     # Calculate the log probabilities of the sequences
     log_prob_chosen = model(input_ids=prompt, labels=chosen).logits
@@ -56,17 +53,18 @@ def slic_loss_logits(model, batch, delta=0.5, lambda_reg=0.1):
 
     # Calculate the calibration loss
     calibration_loss = F.relu(delta - log_prob_chosen + log_prob_rejected)
+    calibration_loss = calibration_loss.mean()
 
     # Calculate the regularization loss
     regularization_loss = lambda_reg * reference_loss
 
     # Combine the losses
-    loss = calibration_loss.mean() + regularization_loss
+    loss = calibration_loss + regularization_loss
 
     return loss
 
 
-def slic_loss(model, batch, delta=0.1, lambda_reg=0.1):
+def slic_loss(model, batch, train_step=0, writer=None, delta=0.1, lambda_reg=0.1):
     prompt = batch["prompts"].to(device)
     chosen = batch["chosens"].to(device)
     rejected = batch["rejecteds"].to(device)
@@ -75,6 +73,11 @@ def slic_loss(model, batch, delta=0.1, lambda_reg=0.1):
     chosen_loss = model(input_ids=prompt, labels=chosen).loss
     rejected_loss = model(input_ids=prompt, labels=rejected).loss
     reference_loss = model(input_ids=prompt, labels=reference).loss
+
+    if writer is not None:
+        writer.add_scalar("Loss/chosen", chosen_loss, train_step)
+        writer.add_scalar("Loss/rejected", rejected_loss, train_step)
+        writer.add_scalar("Loss/reference", reference_loss, train_step)
 
     # Calculate the calibration loss
     calibration_loss = F.relu(delta + chosen_loss - rejected_loss)
@@ -87,27 +90,17 @@ def slic_loss(model, batch, delta=0.1, lambda_reg=0.1):
     return loss
 
 
-loss_fn = slic_loss_logits
-# loss_fn = slic_loss
+# Initialize TensorBoard writer
+# LOG_DIR = "runs/slic/long_short_logits_1"
+LOG_DIR = "runs/slic/long_short_loss_1"
+rmrf_then_mkdir(LOG_DIR)
+writer = SummaryWriter(log_dir=LOG_DIR)
 
+# loss_fn = slic_loss_logits
+loss_fn = slic_loss
+
+train_step = 0
 for epoch in range(EPOCHS):
-    model.train()
-    total_loss = 0
-    for batch in tqdm(train_loader):
-        optimizer.zero_grad()
-        loss = loss_fn(model, batch)
-
-        loss.backward()
-        optimizer.step()
-
-        total_loss += loss.item()
-
-    train_loss = total_loss / len(train_loader)
-    print(f"Train loss {train_loss}")
-
-    # Log training loss to TensorBoard
-    writer.add_scalar("Loss/train", train_loss, epoch)
-
     total_loss = 0
     model.eval().to(device)
     with torch.no_grad():
@@ -130,7 +123,8 @@ for epoch in range(EPOCHS):
             chosen,
             rejected,
             reference,
-        ) = val_dataset.sanity_check()
+        ) = val_dataset.sanity_check(check_idx=0)
+        # ) = train_dataset.sanity_check(check_idx=2)
         sample_input_ids = sample_input_ids.to(device)
         model.eval()
         generated = model.generate(sample_input_ids, max_length=100, temperature=0.0)
@@ -141,6 +135,24 @@ for epoch in range(EPOCHS):
             f"### Input ###\n\n{prompt}\n\n### Output ###\n\n{generated_text}\n\n### Chosen ###\n\n{chosen}\n\n### Rejected ###\n\n{rejected}\n\n### Reference ###\n\n{reference}",
             epoch,
         )
+
+    model.train()
+    total_loss = 0
+    for batch in tqdm(train_loader):
+        optimizer.zero_grad()
+        train_step += 1
+        loss = loss_fn(model, batch, train_step, writer)
+
+        loss.backward()
+        optimizer.step()
+
+        total_loss += loss.item()
+
+    train_loss = total_loss / len(train_loader)
+    print(f"Train loss {train_loss}")
+
+    # Log training loss to TensorBoard
+    writer.add_scalar("Loss/train", train_loss, epoch)
 
 # Close the writer
 writer.close()

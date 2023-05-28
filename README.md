@@ -16,5 +16,9 @@ pip install -r requirements.txt
 ## Running
 
 ```sh
-sh src/do_everything.sh
+# Local development
+sh src/do_everything_debug.sh
+
+# Full training
+sh src/do_everything_large.sh
 ```

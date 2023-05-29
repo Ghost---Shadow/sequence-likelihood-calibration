@@ -114,7 +114,7 @@ def train_loop(args):
         total_correct = 0
         total_count = 0
         with torch.no_grad():
-            random.seed(42)
+            random.seed(42 + epoch)
             for batch in tqdm(val_loader, desc="validation"):
                 input_ids = batch["input_ids"].to(device)
                 labels = batch["labels"].to(device)

@@ -200,7 +200,7 @@ def train_loop(args):
                 loss = loss_fn(model=model, batch=batch)
 
                 total_loss += loss.item()
-                total_count += len(batch)
+                total_count += len(batch["prompts"])
 
         val_loss = total_loss / total_count
         print(f"Validation loss {val_loss}")

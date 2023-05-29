@@ -1,5 +1,6 @@
 import argparse
 from pathlib import Path
+import random
 import time
 from tqdm import tqdm
 from train.utils import rmrf_then_mkdir
@@ -113,6 +114,7 @@ def train_loop(args):
         total_correct = 0
         total_count = 0
         with torch.no_grad():
+            random.seed(42)
             for batch in tqdm(val_loader, desc="validation"):
                 input_ids = batch["input_ids"].to(device)
                 labels = batch["labels"].to(device)
@@ -126,7 +128,7 @@ def train_loop(args):
                 predictions = torch.argmax(outputs.logits, dim=-1)
                 correct = (predictions[0] == labels[0]).float().sum().item()
                 total_correct += correct
-                total_count += len(batch)
+                total_count += len(batch["labels"])
 
         val_loss = total_loss / total_count
         val_accuracy = total_correct / total_count

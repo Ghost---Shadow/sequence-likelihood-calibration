@@ -12,37 +12,13 @@ class ComparisionDataset(Dataset):
     INSTRUCTION = "summarize: "
     LABELS = ["A", "B"]
 
-    def _jsonl_loader(self, jsonl_path, split, debug):
-        self.dataset = []
-        with open(jsonl_path) as f:
-            for line in f:
-                self.dataset.append(json.loads(line))
-
-        train_split = int(0.8 * len(self.dataset))
-
-        if split == "train":
-            self.dataset = self.dataset[:train_split]
-        elif split == "valid1":
-            self.dataset = self.dataset[train_split:]
-        else:
-            raise NotImplementedError()
-
-        if debug:
-            self.dataset = self.dataset[:100]
-
-    def _huggingface_loader(self, split, debug):
-        self.dataset = load_dataset("CarperAI/openai_summarize_comparisons")[split]
-        # self.dataset = self.dataset.filter(ComparisionDataset.filter_function)
-        if debug:
-            self.dataset = self.dataset.select(range(100))
-
-    def __init__(self, split, jsonl_path=None, debug=False):
+    def __init__(self, split, limit=None):
         ComparisionDataset.tokenizer.add_tokens(["\n"])
 
-        if jsonl_path is None:
-            self._huggingface_loader(split, debug)
-        else:
-            self._jsonl_loader(jsonl_path, split, debug)
+        self.dataset = load_dataset("CarperAI/openai_summarize_comparisons")[split]
+        # self.dataset = self.dataset.filter(ComparisionDataset.filter_function)
+        if limit is not None:
+            self.dataset = self.dataset.select(range(limit))
 
     def __len__(self):
         return len(self.dataset)
@@ -75,7 +51,7 @@ class ComparisionDataset(Dataset):
         answers = [None, None]
         prompt = row["prompt"]
 
-        prompt = clean_prompt(prompt)
+        prompt = clean_prompt(prompt, truncate_to=512)
 
         if correct_index is None:
             correct_index = random.randint(0, 1)
@@ -98,14 +74,14 @@ class ComparisionDataset(Dataset):
         row = self.dataset[idx]
         return ComparisionDataset.format_row(row)
 
-    def sanity_check(self):
-        prompts = [self[0]["full_prompt"]]
+    def sanity_check(self, check_idx=0):
+        prompts = [self[check_idx]["full_prompt"]]
         input_ids = ComparisionDataset._tokenize(prompts)
 
         return (
             input_ids,
-            self[0]["full_prompt"],
-            self[0]["correct_answer"],
+            self[check_idx]["full_prompt"],
+            self[check_idx]["correct_answer"],
         )
 
     @staticmethod
@@ -133,7 +109,7 @@ class ComparisionDataset(Dataset):
 
 
 if __name__ == "__main__":
-    dataset = ComparisionDataset(split="train", debug=True)
+    dataset = ComparisionDataset(split="train", limit=10)
     print("Label tokens", dataset.tokenized_labels())
     dataloader = DataLoader(
         dataset, batch_size=2, shuffle=False, collate_fn=ComparisionDataset.collate_fn
@@ -144,20 +120,4 @@ if __name__ == "__main__":
 
     tokenizer = ComparisionDataset.tokenizer
 
-    test_dataloader(dataloader, sanity_path / "hf_comparison.txt", tokenizer)
-
-    jsonl_path = "generated_data/classified_summaries_length/result.jsonl"
-
-    dataset = ComparisionDataset(jsonl_path=jsonl_path, split="train", debug=True)
-    print("Label tokens", dataset.tokenized_labels())
-    dataloader = DataLoader(
-        dataset, batch_size=2, shuffle=False, collate_fn=ComparisionDataset.collate_fn
-    )
-    test_dataloader(dataloader, sanity_path / "length_train.txt", tokenizer)
-
-    dataset = ComparisionDataset(jsonl_path=jsonl_path, split="valid1", debug=True)
-    print("Label tokens", dataset.tokenized_labels())
-    dataloader = DataLoader(
-        dataset, batch_size=2, shuffle=False, collate_fn=ComparisionDataset.collate_fn
-    )
-    test_dataloader(dataloader, sanity_path / "length_valid1.txt", tokenizer)
+    test_dataloader(dataloader, sanity_path / "comparison.txt", tokenizer)

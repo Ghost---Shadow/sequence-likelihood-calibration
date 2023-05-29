@@ -1,7 +1,7 @@
 import re
 
 
-def clean_prompt(prompt):
+def clean_prompt(prompt, truncate_to=1024):
     if "POST:" in prompt:
         prompt = prompt.split("POST:")[1]
     prompt = prompt.replace("\\r\\n", " ")
@@ -14,7 +14,8 @@ def clean_prompt(prompt):
     prompt = re.sub(r"\s+", " ", prompt)
 
     # TODO: Do it properly
-    prompt = prompt.strip()[:1024].strip()
+    if truncate_to is not None:
+        prompt = prompt.strip()[:truncate_to].strip()
 
     return prompt
 

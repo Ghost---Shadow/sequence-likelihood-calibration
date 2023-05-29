@@ -194,13 +194,15 @@ def train_loop(args):
     for epoch in range(epochs):
         total_loss = 0
         model.eval()
+        total_count = 0
         with torch.no_grad():
             for batch in tqdm(val_loader):
                 loss = loss_fn(model=model, batch=batch)
 
                 total_loss += loss.item()
+                total_count += len(batch)
 
-        val_loss = total_loss / len(val_loader)
+        val_loss = total_loss / total_count
         print(f"Validation loss {val_loss}")
 
         # Log validation loss to TensorBoard
@@ -218,7 +220,7 @@ def train_loop(args):
             sample_input_ids = sample_input_ids.to(device)
             model.eval()
             generated = model.generate(
-                sample_input_ids, max_length=100, temperature=0.0
+                sample_input_ids, max_length=512, temperature=0.0
             )
             model.train()
             generated_text = SlicDataset.tokenizer.decode(generated[0])
@@ -229,7 +231,6 @@ def train_loop(args):
             )
 
         model.train()
-        total_loss = 0
         for batch in tqdm(train_loader):
             optimizer.zero_grad()
             train_step += 1
@@ -243,16 +244,11 @@ def train_loop(args):
             loss.backward()
             optimizer.step()
 
-            total_loss += loss.item()
-
-        train_loss = total_loss / len(train_loader)
-        print(f"Train loss {train_loss}")
-
-        # Log training loss to TensorBoard
-        writer.add_scalar("Loss/train", train_loss, epoch)
+            # Log training loss to TensorBoard
+            writer.add_scalar("Loss/train", loss, train_step)
 
         # Drop one checkpoint per epoch
-        torch.save(model.state_dict(), full_checkpoint_dir / f'epoch_{epoch+1}.pth')
+        torch.save(model.state_dict(), full_checkpoint_dir / f"epoch_{epoch+1}.pth")
 
     # Close the writer
     writer.close()

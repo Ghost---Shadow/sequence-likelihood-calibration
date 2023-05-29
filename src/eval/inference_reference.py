@@ -8,7 +8,9 @@ prompt = row["prompt"]
 
 tokenizer = T5Tokenizer.from_pretrained("t5-small")
 model = T5ForConditionalGeneration.from_pretrained("t5-small")
-model.load_state_dict(torch.load('checkpoints/slic/long_short/slic_loss_0.0001_1685292165/epoch_1.pth'))
+model.load_state_dict(
+    torch.load("checkpoints/slic/long_short/slic_loss_0.0001_1685292165/epoch_1.pth")
+)
 
 input_ids = tokenizer(f"summarize: {prompt}", return_tensors="pt").input_ids
 generation_config = GenerationConfig(max_length=1024)

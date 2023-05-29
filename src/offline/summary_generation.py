@@ -68,9 +68,12 @@ def generate_summaries(
                     input_ids, skip_special_tokens=True
                 )
 
-            generated_summaries = [generated_summaries[i:i+num_return_sequences] for i in range(0, len(generated_summaries), num_return_sequences)]
+            generated_summaries = [
+                generated_summaries[i : i + num_return_sequences]
+                for i in range(0, len(generated_summaries), num_return_sequences)
+            ]
 
-            for prompt, summary in zip(input_prompt,generated_summaries ):
+            for prompt, summary in zip(input_prompt, generated_summaries):
                 f.write(
                     json.dumps(
                         {
